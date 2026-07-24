@@ -2,11 +2,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.auth.context import Role
+
 
 class Todo(BaseModel):
     id: UUID
     text: str
     done: bool
+    organization_id: UUID
+    user_id: UUID
 
 
 class TodoCreate(BaseModel):
@@ -36,3 +40,24 @@ class UserLogin(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class Organization(BaseModel):
+    id: UUID
+    name: str
+
+
+class OrganizationCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class OrganizationMembership(BaseModel):
+    organization_id: UUID
+    organization_name: str
+    user_id: UUID
+    role: Role
+
+
+class AddOrganizationMember(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    role: Role = Role.VIEWER

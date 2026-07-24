@@ -1,16 +1,38 @@
 import { clearToken, getToken, setToken } from "./auth";
+import {
+  clearOrganizationId,
+  getOrganizationId,
+  setOrganizationId,
+} from "./organization";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+export const ORG_HEADER = "X-Organization-Id";
 
 export type Todo = {
   id: string;
   text: string;
   done: boolean;
+  organization_id: string;
+  user_id: string;
 };
 
 export type User = {
   id: string;
   username: string;
+};
+
+export type Role = "viewer" | "editor";
+
+export type OrganizationMembership = {
+  organization_id: string;
+  organization_name: string;
+  user_id: string;
+  role: Role;
+};
+
+export type Organization = {
+  id: string;
+  name: string;
 };
 
 export type TokenResponse = {
@@ -30,7 +52,7 @@ export class ApiError extends Error {
 async function request<T>(
   path: string,
   init?: RequestInit,
-  options?: { auth?: boolean },
+  options?: { auth?: boolean; org?: boolean },
 ): Promise<T> {
   const headers = new Headers(init?.headers);
   if (!headers.has("Content-Type") && init?.body) {
@@ -45,6 +67,14 @@ async function request<T>(
     }
   }
 
+  const useOrg = options?.org !== false && useAuth;
+  if (useOrg) {
+    const orgId = getOrganizationId();
+    if (orgId) {
+      headers.set(ORG_HEADER, orgId);
+    }
+  }
+
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers,
@@ -52,6 +82,7 @@ async function request<T>(
 
   if (res.status === 401 && useAuth) {
     clearToken();
+    clearOrganizationId();
   }
 
   if (!res.ok) {
@@ -83,7 +114,7 @@ export async function register(
       method: "POST",
       body: JSON.stringify({ username, password }),
     },
-    { auth: false },
+    { auth: false, org: false },
   );
   setToken(token.access_token);
   return token;
@@ -99,7 +130,7 @@ export async function login(
       method: "POST",
       body: JSON.stringify({ username, password }),
     },
-    { auth: false },
+    { auth: false, org: false },
   );
   setToken(token.access_token);
   return token;
@@ -107,10 +138,39 @@ export async function login(
 
 export function logout(): void {
   clearToken();
+  clearOrganizationId();
 }
 
 export function getMe() {
-  return request<User>("/auth/me");
+  return request<User>("/auth/me", undefined, { org: false });
+}
+
+export function listOrganizations() {
+  return request<OrganizationMembership[]>("/organizations", undefined, {
+    org: false,
+  });
+}
+
+export function createOrganization(name: string) {
+  return request<Organization>(
+    "/organizations",
+    {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    },
+    { org: false },
+  );
+}
+
+export function addOrganizationMember(username: string, role: Role) {
+  return request<OrganizationMembership>("/organizations/members", {
+    method: "POST",
+    body: JSON.stringify({ username, role }),
+  });
+}
+
+export function selectOrganization(organizationId: string) {
+  setOrganizationId(organizationId);
 }
 
 export function listTodos() {

@@ -1,13 +1,23 @@
-from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
 
-from app.auth.deps import AuthServiceDep, CurrentUserDep, get_db
+from app.auth.deps import (
+    AuthServiceDep,
+    CurrentUserDep,
+    OrganizationScopedServiceDep,
+    TodoScopedServiceDep,
+    raise_auth_http_error,
+)
+from app.auth.gated import ForbiddenError, UnauthenticatedError
+from app.auth.middleware import AuthorizationMiddleware
 from app.auth.service import InvalidCredentialsError, UsernameTakenError
 from app.models import (
+    AddOrganizationMember,
+    Organization,
+    OrganizationCreate,
+    OrganizationMembership,
     Todo,
     TodoCreate,
     TodoUpdate,
@@ -16,24 +26,22 @@ from app.models import (
     UserPublic,
     UserRegister,
 )
-from app.repositories.todo_repository import TodoRepository
-from app.todo_service import TodoNotFoundError, TodoService
+from app.organization_service import (
+    MembershipExistsError,
+    OrganizationNotFoundError,
+    UserNotFoundError,
+)
+from app.todo_service import TodoNotFoundError
 
 app = FastAPI(title="Todo API")
 
+app.add_middleware(AuthorizationMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"http://(localhost|127\.0\.0\.1):\d+",
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-def get_todo_service(session: Annotated[Session, Depends(get_db)]) -> TodoService:
-    return TodoService(TodoRepository(session))
-
-
-TodoServiceDep = Annotated[TodoService, Depends(get_todo_service)]
 
 
 @app.get("/health")
@@ -65,59 +73,106 @@ def me(current_user: CurrentUserDep) -> UserPublic:
     return current_user
 
 
+@app.get("/organizations", response_model=list[OrganizationMembership])
+def list_organizations(
+    org_service: OrganizationScopedServiceDep,
+) -> list[OrganizationMembership]:
+    try:
+        return org_service.list_memberships()
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
+
+
+@app.post("/organizations", response_model=Organization, status_code=201)
+def create_organization(
+    body: OrganizationCreate,
+    org_service: OrganizationScopedServiceDep,
+) -> Organization:
+    try:
+        return org_service.create_organization(body.name)
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
+
+
+@app.post(
+    "/organizations/members",
+    response_model=OrganizationMembership,
+    status_code=201,
+)
+def add_organization_member(
+    body: AddOrganizationMember,
+    org_service: OrganizationScopedServiceDep,
+) -> OrganizationMembership:
+    try:
+        return org_service.add_member(body.username, body.role)
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
+    except UserNotFoundError:
+        raise HTTPException(status_code=404, detail="User not found") from None
+    except MembershipExistsError:
+        raise HTTPException(
+            status_code=409, detail="User is already a member"
+        ) from None
+    except OrganizationNotFoundError:
+        raise HTTPException(status_code=404, detail="Organization not found") from None
+
+
 @app.get("/todos", response_model=list[Todo])
-def list_todos(
-    todo_service: TodoServiceDep,
-    current_user: CurrentUserDep,
-) -> list[Todo]:
-    return todo_service.list_todos(current_user.id)
+def list_todos(todo_service: TodoScopedServiceDep) -> list[Todo]:
+    try:
+        return todo_service.list_todos()
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
 
 
 @app.get("/todos/{todo_id}", response_model=Todo)
-def get_todo(
-    todo_id: UUID,
-    todo_service: TodoServiceDep,
-    current_user: CurrentUserDep,
-) -> Todo:
+def get_todo(todo_id: UUID, todo_service: TodoScopedServiceDep) -> Todo:
     try:
-        return todo_service.get_todo(todo_id, current_user.id)
+        return todo_service.get_todo(todo_id)
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
     except TodoNotFoundError:
         raise HTTPException(status_code=404, detail="Todo not found") from None
 
 
 @app.post("/todos", response_model=Todo, status_code=201)
-def create_todo(
-    body: TodoCreate,
-    todo_service: TodoServiceDep,
-    current_user: CurrentUserDep,
-) -> Todo:
-    return todo_service.create_todo(body.text, current_user.id)
+def create_todo(body: TodoCreate, todo_service: TodoScopedServiceDep) -> Todo:
+    try:
+        return todo_service.create_todo(body.text)
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
 
 
 @app.patch("/todos/{todo_id}", response_model=Todo)
 def update_todo(
     todo_id: UUID,
     body: TodoUpdate,
-    todo_service: TodoServiceDep,
-    current_user: CurrentUserDep,
+    todo_service: TodoScopedServiceDep,
 ) -> Todo:
     try:
         return todo_service.update_todo(
             todo_id,
-            current_user.id,
             body.model_dump(exclude_unset=True),
         )
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
     except TodoNotFoundError:
         raise HTTPException(status_code=404, detail="Todo not found") from None
 
 
 @app.delete("/todos/{todo_id}", status_code=204)
-def delete_todo(
-    todo_id: UUID,
-    todo_service: TodoServiceDep,
-    current_user: CurrentUserDep,
-) -> None:
+def delete_todo(todo_id: UUID, todo_service: TodoScopedServiceDep) -> None:
     try:
-        todo_service.delete_todo(todo_id, current_user.id)
+        todo_service.delete_todo(todo_id)
+    except (UnauthenticatedError, ForbiddenError) as exc:
+        raise_auth_http_error(exc)
+        raise
     except TodoNotFoundError:
         raise HTTPException(status_code=404, detail="Todo not found") from None
