@@ -12,12 +12,17 @@ A deliberately over-engineered todo list app used to introduce real-world backen
 |------|------|
 | Backend | FastAPI + Pydantic (`backend/`) |
 | Frontend | Next.js App Router + React + Tailwind (`frontend/`) |
-| Local run | `./dev/start.sh` — API `:8000`, web `:3000` |
+| Database | MariaDB 11 via Docker Compose (`dev/docker-compose.yml`) |
+| ORM / SQL | SQLAlchemy 2.0 + PyMySQL (sync) |
+| Migrations | Alembic (`backend/alembic/`) |
+| Local run | `./dev/start.sh` — MariaDB `:3306`, API `:8000`, web `:3000` |
 | Format | Ruff (backend), Prettier (frontend) |
 | Hooks | pre-commit runs formatters before each commit |
 | CI | `.github/workflows/format.yml` checks formatting on PRs |
 
-Todos are currently in-memory. Domain shape: `id: UUID`, `text: str`, `done: bool`.
+Todos persist in MariaDB. API/domain shape: `id: UUID`, `text: str`, `done: bool`. DB also stores `created_at` / `updated_at` (not exposed on the API yet).
+
+Default connection URL: `mysql+pymysql://todos:todos@127.0.0.1:3306/todos` (override with `DATABASE_URL`).
 
 ## Formatting
 
@@ -48,9 +53,15 @@ Only use direct pushes to `main` if the user explicitly overrides this rule for 
 
 ## Working agreements
 
-- Keep the first versions simple; complexity is added intentionally later (logging, DB, auth, etc.).
+- Keep the first versions simple; complexity is added intentionally later (logging, auth, etc.).
 - Match existing style and file layout. Avoid drive-by refactors.
-- Backend: FastAPI routes in `backend/app/main.py`; persistence/domain logic in `TodoService` (`backend/app/todo_service.py`); Pydantic models in `backend/app/models.py`.
+- Backend layers:
+  - Routes in `backend/app/main.py` (HTTP + Depends wiring)
+  - Domain logic in `TodoService` (`backend/app/todo_service.py`)
+  - Persistence in `TodoRepository` (`backend/app/repositories/todo_repository.py`)
+  - SQLAlchemy row model in `backend/app/db/models.py`; sessions in `backend/app/db/session.py`
+  - Pydantic API models in `backend/app/models.py`
+- Schema changes go through Alembic revisions under `backend/alembic/versions/`.
 - Frontend: interactive UI is client components (`"use client"`). Before Next.js changes, read `frontend/AGENTS.md` and the local guides under `frontend/node_modules/next/dist/docs/`.
 - Do not commit secrets, `.venv/`, `node_modules/`, or `.next/`.
 - Do not amend commits that are already pushed; prefer a new commit.
@@ -59,7 +70,9 @@ Only use direct pushes to `main` if the user explicitly overrides this rule for 
 ## Useful commands
 
 ```bash
-./dev/start.sh                          # API + frontend (+ installs pre-commit hook)
+./dev/start.sh                          # MariaDB + migrate + API + frontend
+./dev/db.sh                             # interactive mariadb client in the db container
+(cd backend && ../.venv/bin/alembic upgrade head)
 .venv/bin/uvicorn app.main:app --app-dir backend --reload --port 8000
 (cd frontend && npm run dev)
 gh pr create --base main                # open PR for current branch
