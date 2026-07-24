@@ -1,6 +1,7 @@
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from app.models import Todo
+from app.repositories.todo_repository import TodoRepository
 
 
 class TodoNotFoundError(Exception):
@@ -8,35 +9,29 @@ class TodoNotFoundError(Exception):
 
 
 class TodoService:
-    """In-memory create/read/update/delete for todos."""
+    """Domain operations for todos; persistence is delegated to a repository."""
 
-    def __init__(self) -> None:
-        self._todos: dict[UUID, Todo] = {}
+    def __init__(self, repository: TodoRepository) -> None:
+        self._repository = repository
 
     def list_todos(self) -> list[Todo]:
-        return list(self._todos.values())
+        return self._repository.list_todos()
 
     def get_todo(self, todo_id: UUID) -> Todo:
-        todo = self._todos.get(todo_id)
+        todo = self._repository.get_todo(todo_id)
         if todo is None:
             raise TodoNotFoundError(todo_id)
         return todo
 
     def create_todo(self, text: str) -> Todo:
-        todo = Todo(id=uuid4(), text=text, done=False)
-        self._todos[todo.id] = todo
-        return todo
+        return self._repository.create_todo(text)
 
     def update_todo(self, todo_id: UUID, updates: dict[str, object]) -> Todo:
-        todo = self.get_todo(todo_id)
-        if not updates:
-            return todo
-
-        updated = todo.model_copy(update=updates)
-        self._todos[todo_id] = updated
-        return updated
+        todo = self._repository.update_todo(todo_id, updates)
+        if todo is None:
+            raise TodoNotFoundError(todo_id)
+        return todo
 
     def delete_todo(self, todo_id: UUID) -> None:
-        if todo_id not in self._todos:
+        if not self._repository.delete_todo(todo_id):
             raise TodoNotFoundError(todo_id)
-        del self._todos[todo_id]

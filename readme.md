@@ -9,7 +9,7 @@ we are going to start with:
 Then we are going to introduce 
 
 - logging 
-- database 
+- database (MariaDB via Docker Compose + Alembic + repository — local instance in `./dev/start.sh`)
 - auth 
 - configuration
 - different lists 
