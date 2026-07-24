@@ -40,6 +40,7 @@ htmlcov/
 *.tfstate
 *.tfstate.*
 *.tfvars
+!envs/*.tfvars
 !*.tfvars.example
 crash.log
 override.tf
