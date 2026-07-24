@@ -10,6 +10,26 @@ WEB_PORT="${WEB_PORT:-3000}"
 DATABASE_URL="${DATABASE_URL:-mysql+pymysql://todos:todos@127.0.0.1:3306/todos}"
 export DATABASE_URL
 
+if [[ -f .env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env
+  set +a
+fi
+
+if [[ -z "${JWT_SECRET:-}" || "${JWT_SECRET}" == "dev-only-change-me" ]]; then
+  JWT_SECRET="$(openssl rand -hex 32)"
+  if [[ -f .env ]] && grep -q '^JWT_SECRET=' .env; then
+    # Replace existing insecure/empty value.
+    tmp_env="$(mktemp)"
+    grep -v '^JWT_SECRET=' .env >"$tmp_env" || true
+    mv "$tmp_env" .env
+  fi
+  echo "JWT_SECRET=${JWT_SECRET}" >> .env
+  echo "Generated JWT_SECRET and wrote it to .env"
+fi
+export JWT_SECRET
+
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required to run the local MariaDB instance" >&2
   exit 1
