@@ -50,7 +50,7 @@ Only use direct pushes to `main` if the user explicitly overrides this rule for 
 
 - Keep the first versions simple; complexity is added intentionally later (logging, DB, auth, etc.).
 - Match existing style and file layout. Avoid drive-by refactors.
-- Backend: FastAPI routes + Pydantic models in `backend/app/`.
+- Backend: FastAPI routes in `backend/app/main.py`; persistence/domain logic in `TodoService` (`backend/app/todo_service.py`); Pydantic models in `backend/app/models.py`.
 - Frontend: interactive UI is client components (`"use client"`). Before Next.js changes, read `frontend/AGENTS.md` and the local guides under `frontend/node_modules/next/dist/docs/`.
 - Do not commit secrets, `.venv/`, `node_modules/`, or `.next/`.
 - Do not amend commits that are already pushed; prefer a new commit.
