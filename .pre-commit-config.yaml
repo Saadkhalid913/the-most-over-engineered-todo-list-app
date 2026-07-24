@@ -1,0 +1,22 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
+    hooks:
+      - id: ruff-format
+        files: ^backend/
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.9.6
+    hooks:
+      - id: prettier
+        files: ^frontend/
+        exclude: ^(frontend/package-lock\.json|frontend/next-env\.d\.ts)$
+        types_or:
+          - javascript
+          - jsx
+          - ts
+          - tsx
+          - css
+          - json
+          - yaml
+          - markdown

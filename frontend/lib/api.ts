@@ -38,7 +38,10 @@ export function createTodo(text: string) {
   });
 }
 
-export function updateTodo(id: string, patch: { text?: string; done?: boolean }) {
+export function updateTodo(
+  id: string,
+  patch: { text?: string; done?: boolean },
+) {
   return request<Todo>(`/todos/${id}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
