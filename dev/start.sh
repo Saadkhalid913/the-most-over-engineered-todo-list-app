@@ -14,9 +14,19 @@ if [[ ! -x .venv/bin/uvicorn ]]; then
   .venv/bin/pip install -r backend/requirements.txt
 fi
 
+if [[ ! -x .venv/bin/pre-commit ]] || [[ ! -x .venv/bin/ruff ]]; then
+  echo "Installing dev tooling (ruff, pre-commit)..."
+  .venv/bin/pip install -r requirements-dev.txt
+fi
+
 if [[ ! -d frontend/node_modules ]]; then
   echo "Installing frontend deps..."
   (cd frontend && npm install)
+fi
+
+if [[ ! -f .git/hooks/pre-commit ]] || ! grep -q "pre-commit" .git/hooks/pre-commit 2>/dev/null; then
+  echo "Installing git pre-commit hooks..."
+  .venv/bin/pre-commit install
 fi
 
 PIDS=()

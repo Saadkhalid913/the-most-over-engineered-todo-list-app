@@ -13,8 +13,27 @@ A deliberately over-engineered todo list app used to introduce real-world backen
 | Backend | FastAPI + Pydantic (`backend/`) |
 | Frontend | Next.js App Router + React + Tailwind (`frontend/`) |
 | Local run | `./dev/start.sh` — API `:8000`, web `:3000` |
+| Format | Ruff (backend), Prettier (frontend) |
+| Hooks | pre-commit runs formatters before each commit |
+| CI | `.github/workflows/format.yml` checks formatting on PRs |
 
 Todos are currently in-memory. Domain shape: `id: UUID`, `text: str`, `done: bool`.
+
+## Formatting
+
+Formatters must stay green in CI. Rely on pre-commit so commits are already formatted.
+
+```bash
+.venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pre-commit install
+.venv/bin/pre-commit run --all-files   # format / verify locally
+(cd frontend && npm run format)        # prettier write
+.venv/bin/ruff format backend          # ruff write
+```
+
+- Backend config: `pyproject.toml` (`[tool.ruff]`)
+- Frontend config: `frontend/.prettierrc.json`
+- Hook config: `.pre-commit-config.yaml`
 
 ## Git / PR workflow (required)
 
@@ -40,7 +59,7 @@ Only use direct pushes to `main` if the user explicitly overrides this rule for 
 ## Useful commands
 
 ```bash
-./dev/start.sh                          # API + frontend
+./dev/start.sh                          # API + frontend (+ installs pre-commit hook)
 .venv/bin/uvicorn app.main:app --app-dir backend --reload --port 8000
 (cd frontend && npm run dev)
 gh pr create --base main                # open PR for current branch
